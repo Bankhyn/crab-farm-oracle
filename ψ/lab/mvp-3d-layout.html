@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>🦀 MVP 3D Layout v5 - Realistic Working System</title>
+  <style>
+    body { 
+      margin: 0; 
+      overflow: hidden; 
+      background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%); 
+      font-family: 'Segoe UI', Arial, sans-serif; 
+    }
+    canvas { display: block; }
+    
+    #info {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(0,0,0,0.92);
+      color: white;
+      padding: 20px;
+      border-radius: 12px;
+      max-width: 350px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    
+    h2 { 
+      margin: 0 0 12px 0; 
+      color: #3498db; 
+      font-size: 20px; 
+      border-bottom: 2px solid #3498db;
+      padding-bottom: 8px;
+    }
+    
+    h3 { margin: 12px 0 8px 0; color: #f1c40f; font-size: 14px; }
+    
+    .scale {
+      margin-top: 12px;
+      padding: 10px;
+      background: rgba(52, 152, 219, 0.15);
+      border-radius: 6px;
+      border-left: 3px solid #3498db;
+      font-size: 12px;
+    }
+    
+    .legend {
+      margin-top: 12px;
+      padding: 10px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 6px;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin: 6px 0;
+      font-size: 11px;
+    }
+    
+    .legend-color {
+      width: 24px;
+      height: 6px;
+      border-radius: 3px;
+      margin-right: 8px;
+    }
+    
+    .highlight { 
+      color: #f1c40f; 
+      font-weight: bold; 
+      margin-top: 12px;
+      display: block;
+      font-size: 11px;
+    }
+    
+    .note {
+      margin-top: 12px;
+      padding: 10px;
+      background: rgba(231, 76, 60, 0.15);
+      border-left: 3px solid #e74c3c;
+      border-radius: 6px;
+      font-size: 11px;
+    }
+    
+    #controls {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(0,0,0,0.85);
+      color: white;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <h2>🦀 MVP 3D Layout v5</h2>
+    <p style="margin: 4px 0; color: #95a5a6; font-size: 11px;">Realistic Working System</p>
+    
+    <div class="scale">
+      <strong>📏 Scale:</strong><br/>
+      Grid = 0.5m × 0.5m<br/>
+      1 unit ≈ 30 cm
+    </div>
+    
+    <div class="legend">
+      <h3 style="margin-top:0">🎨 Legend:</h3>
+      
+      <div class="legend-item">
+        <div class="legend-color" style="background: #3498db;"></div>
+        <span><strong>กล่องปู</strong> (30×40×15 cm)</span>
+      </div>
+      
+      <div class="legend-item">
+        <div class="legend-color" style="background: #5dade2;"></div>
+        <span><strong>น้ำในกล่อง</strong> (10 cm depth)</span>
+      </div>
+      
+      <div class="legend-item">
+        <div class="legend-color" style="background: #f4d03f;"></div>
+        <span><strong>ทราย</strong> (3-5 cm)</span>
+      </div>
+      
+      <div class="legend-item">
+        <div class="legend-color" style="background: #1abc9c;"></div>
+        <span><strong>Central Tank</strong> (1000L)</span>
+      </div>
+      
+      <div class="legend-item">
+        <div class="legend-color" style="background: #e74c3c;"></div>
+        <span><strong>Pump</strong> (½ HP)</span>
+      </div>
+      
+      <div class="legend-item">
+        <div class="legend-color" style="background: #f39c12;"></div>
+        <span><strong>ท่อน้ำเข้า</strong> (with pressure)</span>
+      </div>
+      
+      <div class="legend-item">
+        <div class="legend-color" style="background: #9b59b6;"></div>
+        <span><strong>ท่อน้ำออก</strong> (gravity flow)</span>
+      </div>
+    </div>
+    
+    <div class="note">
+      <strong>⚙️ ระบบทำงานจริง:</strong><br/>
+      • ท่อน้ำเข้า: แรงดันจาก pump<br/>
+      • ท่อน้ำออก: ล้นออกทาง overflow pipe<br/>
+      • ระดับน้ำคงที่: 10 cm<br/>
+      • ท่อลาดเอียง: 2-3° สำหรับ drainage
+    </div>
+    
+    <p class="highlight">🖱️ เมาส์ลากหมุน | Scroll ซูม</p>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    // Scene
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x16213e);
+    
+    // Camera
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(16, 12, 16);
+    camera.lookAt(0, 0, 0);
+    
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+    
+    // Lights
+    const ambient = new THREE.AmbientLight(0x606080, 0.8);
+    scene.add(ambient);
+    
+    const light = new THREE.DirectionalLight(0xffffff, 0.9);
+    light.position.set(15, 20, 12);
+    light.castShadow = true;
+    light.shadow.mapSize.width = 2048;
+    light.shadow.mapSize.height = 2048;
+    scene.add(light);
+    
+    // Floor
+    const floorGeo = new THREE.PlaneGeometry(24, 20);
+    const floorMat = new THREE.MeshLambertMaterial({ color: 0x2c3e50 });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -0.1;
+    floor.receiveShadow = true;
+    scene.add(floor);
+    
+    // Grid (0.5m per square)
+    const grid = new THREE.GridHelper(24, 48, 0x555577, 0x333355);
+    scene.add(grid);
+    
+    // Materials
+    const boxMat = new THREE.MeshLambertMaterial({ color: 0x3498db });
+    const boxSideMat = new THREE.MeshLambertMaterial({ 
+      color: 0x3498db,
+      transparent: true,
+      opacity: 0.7
+    });
+    const tankMat = new THREE.MeshLambertMaterial({ 
+      color: 0x1abc9c, 
+      transparent: true, 
+      opacity: 0.7 
+    });
+    const pumpMat = new THREE.MeshLambertMaterial({ color: 0xe74c3c });
+    const inletPipeMat = new THREE.MeshLambertMaterial({ color: 0xf39c12 });
+    const outletPipeMat = new THREE.MeshLambertMaterial({ color: 0x9b59b6 });
+    const fittingMat = new THREE.MeshLambertMaterial({ color: 0x95a5a6 });
+    const waterMat = new THREE.MeshLambertMaterial({ 
+      color: 0x5dade2, 
+      transparent: true, 
+      opacity: 0.5 
+    });
+    const sandMat = new THREE.MeshLambertMaterial({ color: 0xf4d03f });
+    
+    // Helper: Create pipe (horizontal or vertical)
+    const createPipe = (length, radius, material, x, y, z, isHorizontal = true, angle = 0) => {
+      const geo = new THREE.CylinderGeometry(radius, radius, length, 12);
+      const pipe = new THREE.Mesh(geo, material);
+      pipe.position.set(x, y, z);
+      
+      if (isHorizontal) {
+        pipe.rotation.z = Math.PI / 2;
+        pipe.rotation.y = angle;
+      }
+      
+      pipe.castShadow = true;
+      scene.add(pipe);
+      return pipe;
+    };
+    
+    // Helper: Create fitting
+    const createFitting = (radius, x, y, z) => {
+      const geo = new THREE.SphereGeometry(radius, 12, 12);
+      const fitting = new THREE.Mesh(geo, fittingMat);
+      fitting.position.set(x, y, z);
+      fitting.castShadow = true;
+      scene.add(fitting);
+      return fitting;
+    };
+    
+    // Helper: Create box with water and sand
+    const createBox = (x, z) => {
+      const group = new THREE.Group();
+      
+      // Box (transparent sides)
+      const boxGeo = new THREE.BoxGeometry(1.4, 0.6, 1.8);
+      const box = new THREE.Mesh(boxGeo, [
+        boxSideMat, boxSideMat, // left, right
+        boxMat, boxMat, // top, bottom
+        boxSideMat, boxSideMat // front, back
+      ]);
+      box.position.set(x, 0.3, z);
+      box.castShadow = true;
+      box.receiveShadow = true;
+      scene.add(box);
+      
+      // Sand (3-5 cm)
+      const sandGeo = new THREE.BoxGeometry(1.35, 0.12, 1.75);
+      const sand = new THREE.Mesh(sandGeo, sandMat);
+      sand.position.set(x, 0.06, z);
+      scene.add(sand);
+      
+      // Water (10 cm depth above sand)
+      const waterGeo = new THREE.BoxGeometry(1.38, 0.1, 1.78);
+      const water = new THREE.Mesh(waterGeo, waterMat);
+      water.position.set(x, 0.17, z);
+      scene.add(water);
+      
+      // Inlet pipe (vertical, reaches into water)
+      const inletX = x - 0.55;
+      const inletGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.5, 8);
+      const inlet = new THREE.Mesh(inletGeo, inletPipeMat);
+      inlet.position.set(inletX, 0.25, z);
+      scene.add(inlet);
+      
+      // Outlet pipe (overflow, at water level)
+      const outletX = x + 0.55;
+      const outletGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.3, 8);
+      const outlet = new THREE.Mesh(outletGeo, outletPipeMat);
+      outlet.position.set(outletX, 0.22, z);
+      scene.add(outlet);
+      
+      return { box, sand, water, inlet, outlet, x, z };
+    };
+    
+    // ============================================
+    // CENTRAL TANK (1000L)
+    // ============================================
+    const tankX = 12;
+    const tankZ = 0;
+    
+    const tankGeo = new THREE.CylinderGeometry(2.2, 2.2, 1.6, 32);
+    const tank = new THREE.Mesh(tankGeo, tankMat);
+    tank.position.set(tankX, 0.8, tankZ);
+    tank.castShadow = true;
+    scene.add(tank);
+    
+    // Tank rim
+    const rimGeo = new THREE.TorusGeometry(2.2, 0.12, 8, 32);
+    const rimMat = new THREE.MeshLambertMaterial({ color: 0x16a085 });
+    const rim = new THREE.Mesh(rimGeo, rimMat);
+    rim.rotation.x = Math.PI / 2;
+    rim.position.set(tankX, 1.6, tankZ);
+    scene.add(rim);
+    
+    // Water in tank
+    const waterGeo = new THREE.CylinderGeometry(2.1, 2.1, 1.4, 32);
+    const water = new THREE.Mesh(waterGeo, waterMat);
+    water.position.set(tankX, 0.7, tankZ);
+    scene.add(water);
+    
+    // ============================================
+    // PUMP
+    // ============================================
+    const pumpX = 10;
+    const pumpZ = -3;
+    
+    const pumpGeo = new THREE.BoxGeometry(1, 0.6, 0.6);
+    const pump = new THREE.Mesh(pumpGeo, pumpMat);
+    pump.position.set(pumpX, 0.3, pumpZ);
+    pump.castShadow = true;
+    scene.add(pump);
+    
+    // Pump inlet/outlet indicators
+    const pumpInGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.3, 8);
+    const pumpIn = new THREE.Mesh(pumpInGeo, inletPipeMat);
+    pumpIn.position.set(pumpX + 0.5, 0.3, pumpZ);
+    pumpIn.rotation.z = Math.PI / 2;
+    scene.add(pumpIn);
+    
+    const pumpOutGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.3, 8);
+    const pumpOut = new THREE.Mesh(pumpOutGeo, outletPipeMat);
+    pumpOut.position.set(pumpX - 0.5, 0.3, pumpZ);
+    pumpOut.rotation.z = Math.PI / 2;
+    scene.add(pumpOut);
+    
+    // ============================================
+    // INDIVIDUAL BOXES (20 boxes - 4 rows × 5 cols)
+    // ============================================
+    const boxes = [];
+    
+    for (let row = 0; row < 4; row++) {
+      for (let col = 0; col < 5; col++) {
+        const x = -6 + col * 2.8;
+        const z = -5.5 + row * 3.5;
+        boxes.push(createBox(x, z));
+      }
+    }
+    
+    // ============================================
+    // PIPING SYSTEM - REALISTIC LAYOUT
+    // ============================================
+    
+    const mainPipeRadius = 0.1;
+    const branchPipeRadius = 0.04;
+    
+    // 1. Tank → Pump (suction, lower level)
+    createPipe(2.5, mainPipeRadius, inletPipeMat, tankX - 1.25, 0.15, pumpZ + 1.25, true, Math.PI/4);
+    createFitting(0.15, tankX, 0.15, pumpZ + 2.5);
+    
+    // 2. Pump → Distribution Header (pressurized)
+    const headerY = 0.8; // Close to box level, not too high
+    const headerX = -1;
+    
+    // Main header from pump
+    createPipe(pumpX - headerX, mainPipeRadius, inletPipeMat, (pumpX + headerX)/2, headerY, pumpZ, true, 0);
+    createFitting(0.18, pumpX - 0.6, headerY, pumpZ);
+    
+    // 3. Distribution Manifold (horizontal, low height)
+    createPipe(10, mainPipeRadius, inletPipeMat, headerX, headerY, pumpZ, true, 0);
+    createFitting(0.18, headerX - 5, headerY, pumpZ);
+    createFitting(0.18, headerX + 5, headerY, pumpZ);
+    
+    // 4. Branch lines to each row (4 rows)
+    for (let row = 0; row < 4; row++) {
+      const rowZ = -5.5 + row * 3.5;
+      const rowStartX = headerX;
+      const rowEndX = -6 + 2.8 * 4 + 0.5;
+      
+      // Valve at row start
+      createFitting(0.15, rowStartX, headerY, rowZ);
+      
+      // Horizontal branch for row
+      createPipe(rowEndX - rowStartX, mainPipeRadius * 0.8, inletPipeMat, (rowStartX + rowEndX)/2, headerY, rowZ, true, 0);
+      
+      // Drop to each box (5 boxes per row)
+      for (let col = 0; col < 5; col++) {
+        const boxX = -6 + col * 2.8;
+        
+        // Fitting at top
+        createFitting(0.1, boxX - 0.55, headerY, rowZ);
+        
+        // Vertical drop (gentle angle)
+        const dropHeight = headerY - 0.25;
+        createPipe(dropHeight, branchPipeRadius, inletPipeMat, boxX - 0.55, headerY - dropHeight/2, rowZ, false, 0);
+      }
+    }
+    
+    // 5. Return Manifold (slightly lower, gravity flow)
+    const returnY = 0.65; // Lower than supply
+    const returnX = 6;
+    
+    // Collection from each row
+    for (let row = 0; row < 4; row++) {
+      const rowZ = -5.5 + row * 3.5;
+      const rowStartX = -6 + 0.5;
+      const rowEndX = returnX;
+      
+      // Collection pipe for row (slight slope visible)
+      createPipe(rowEndX - rowStartX, mainPipeRadius * 0.8, outletPipeMat, (rowStartX + rowEndX)/2, returnY, rowZ, true, 0);
+      
+      // Overflow from each box
+      for (let col = 0; col < 5; col++) {
+        const boxX = -6 + col * 2.8;
+        
+        // Vertical riser (short, just above water level)
+        createPipe(returnY - 0.22, branchPipeRadius, outletPipeMat, boxX + 0.55, (returnY + 0.22)/2, rowZ, false, 0);
+        
+        // Fitting
+        createFitting(0.1, boxX + 0.55, returnY, rowZ);
+      }
+      
+      // Fitting at row end
+      createFitting(0.15, rowEndX, returnY, rowZ);
+    }
+    
+    // 6. Main return to tank (with slope)
+    const returnSlope = 0.1; // Slight upward slope for visibility
+    createPipe(5, mainPipeRadius, outletPipeMat, returnX + 2.5, returnY, 0, true, 0);
+    createFitting(0.2, returnX, returnY, 0);
+    
+    // Return enters tank at bottom (gravity drain)
+    createPipe(returnY - 0.15, mainPipeRadius, outletPipeMat, tankX - 0.5, (returnY + 0.15)/2, 0, false, 0);
+    createFitting(0.15, tankX - 0.5, returnY, 0);
+    
+    // ============================================
+    // ANIMATIONS (Optional - Water Flow)
+    // ============================================
+    
+    // Add subtle animation to show water movement
+    let time = 0;
+    
+    function animate() {
+      requestAnimationFrame(animate);
+      
+      time += 0.01;
+      
+      // Subtle wave effect on water in boxes
+      boxes.forEach((b, i) => {
+        b.water.position.y = 0.17 + Math.sin(time + i * 0.5) * 0.003;
+      });
+      
+      renderer.render(scene, camera);
+    }
+    
+    animate();
+    
+    // ============================================
+    // MOUSE CONTROLS
+    // ============================================
+    
+    let isDragging = false;
+    let previousMouse = { x: 0, y: 0 };
+    
+    renderer.domElement.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      previousMouse = { x: e.clientX, y: e.clientY };
+    });
+    
+    renderer.domElement.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      
+      const deltaX = e.clientX - previousMouse.x;
+      const deltaY = e.clientY - previousMouse.y;
+      
+      const rotationSpeed = 0.006;
+      
+      const theta = deltaX * rotationSpeed;
+      const phi = deltaY * rotationSpeed;
+      
+      const x = camera.position.x;
+      const z = camera.position.z;
+      
+      camera.position.x = x * Math.cos(theta) - z * Math.sin(theta);
+      camera.position.z = x * Math.sin(theta) + z * Math.cos(theta);
+      camera.position.y = Math.max(5, Math.min(35, camera.position.y - phi * 2));
+      
+      camera.lookAt(0, 0, 0);
+      
+      previousMouse = { x: e.clientX, y: e.clientY };
+    });
+    
+    renderer.domElement.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
+    
+    // Zoom
+    renderer.domElement.addEventListener('wheel', (e) => {
+      const zoomSpeed = 0.001;
+      const distance = camera.position.length();
+      const newDistance = distance * (1 + e.deltaY * zoomSpeed);
+      
+      if (newDistance > 8 && newDistance < 45) {
+        camera.position.normalize().multiplyScalar(newDistance);
+      }
+    });
+    
+    // Resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

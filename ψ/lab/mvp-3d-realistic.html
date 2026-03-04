@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Crab Farm RAS - Rack + Gravity Flow</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{overflow:hidden;background:#1a1d23;font-family:'Segoe UI',system-ui,sans-serif}
+    canvas{display:block}
+    #hud{position:absolute;top:14px;left:14px;background:rgba(0,0,0,.75);
+      color:#ccc;padding:16px;border-radius:14px;width:270px;font-size:11px;line-height:1.6}
+    #hud h1{font-size:14px;color:#4fc3f7;margin-bottom:2px}
+    #hud .sub{color:#666;font-size:9.5px;margin-bottom:8px}
+    .fl{padding:6px 8px;background:rgba(79,195,247,.08);border-left:2px solid #4fc3f7;
+      border-radius:0 5px 5px 0;font-size:9.5px;color:#999;margin-bottom:8px}
+    .fl b{color:#4fc3f7}
+    .grav{padding:6px 8px;background:rgba(102,187,106,.08);border-left:2px solid #66bb6a;
+      border-radius:0 5px 5px 0;font-size:9.5px;color:#999;margin-bottom:8px}
+    .grav b{color:#66bb6a}
+    .lg{display:grid;grid-template-columns:1fr 1fr;gap:3px}
+    .li{display:flex;align-items:center;gap:4px;font-size:9.5px;color:#999}
+    .dd{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+    #tip{position:absolute;display:none;pointer-events:none;background:rgba(0,0,0,.9);
+      color:#fff;padding:10px 14px;border-radius:10px;font-size:11px;
+      border:1px solid rgba(79,195,247,.3);max-width:250px;line-height:1.5}
+    #tip .t{color:#4fc3f7;font-weight:600;margin-bottom:3px}
+    #bar{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
+      background:rgba(0,0,0,.7);color:#666;padding:5px 16px;border-radius:14px;font-size:9.5px}
+    #cost{position:absolute;bottom:12px;right:14px;background:rgba(0,0,0,.75);
+      color:#aaa;padding:10px 14px;border-radius:10px;font-size:10px}
+    #cost .big{color:#66bb6a;font-size:17px;font-weight:700}
+  </style>
+</head>
+<body>
+<div id="hud">
+  <h1>Crab Farm RAS v2</h1>
+  <div class="sub">Rack + Gravity Flow | 20 Boxes | Footprint 2.4 x 0.5m</div>
+  <div class="fl">
+    <b>1</b> Tank <b>&rarr;2</b> Pump <b>&uarr;3</b> Filters
+    <b>&uarr;4</b> Top Manifold <b>&darr;</b> Shelf4 &darr;3 &darr;2 &darr;1
+    <b>&darr;</b> Gravity drain &rarr; Tank
+  </div>
+  <div class="grav">
+    <b>Gravity Flow:</b> Pump pushes UP once.<br>
+    Water cascades DOWN 4 shelves by gravity.<br>
+    <b>Saves:</b> 75% floor space, pump works less.
+  </div>
+  <div class="lg">
+    <div class="li"><div class="dd" style="background:#1565c0"></div>Tank 1000L</div>
+    <div class="li"><div class="dd" style="background:#c62828"></div>Pump 1/2HP</div>
+    <div class="li"><div class="dd" style="background:#7b1fa2"></div>Mech Filter</div>
+    <div class="li"><div class="dd" style="background:#546e7a"></div>Skimmer</div>
+    <div class="li"><div class="dd" style="background:#2e7d32"></div>K1 Bio</div>
+    <div class="li"><div class="dd" style="background:#4527a0"></div>UV 9W</div>
+    <div class="li"><div class="dd" style="background:#ff8f00"></div>Steel Rack</div>
+    <div class="li"><div class="dd" style="background:#42a5f5"></div>HDPE Boxes</div>
+    <div class="li"><div class="dd" style="background:#e65100"></div>Supply (up)</div>
+    <div class="li"><div class="dd" style="background:#3949ab"></div>Drain (gravity)</div>
+    <div class="li"><div class="dd" style="background:#00838f"></div>Air System</div>
+    <div class="li"><div class="dd" style="background:#ad1457"></div>DC Backup</div>
+  </div>
+</div>
+<div id="tip"><div class="t"></div><div class="b"></div></div>
+<div id="bar">Drag: Rotate | Scroll: Zoom | Hover: Info</div>
+<div id="cost">
+  <div style="color:#666">Option B + Rack</div>
+  <div class="big">~19,000 THB</div>
+  <div style="color:#555;font-size:9px">incl. Skimmer K1 UV Backup Rack</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ═══ SCENE ═══
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a2030);
+scene.fog = new THREE.FogExp2(0x1a2030, 0.06);
+
+// ═══ CAMERA ═══
+var camera = new THREE.PerspectiveCamera(40, innerWidth/innerHeight, 0.05, 100);
+camera.position.set(4.0, 2.8, 4.5);
+camera.lookAt(1.0, 0.7, 0.4);
+
+// ═══ RENDERER ═══
+var renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+document.body.appendChild(renderer.domElement);
+
+// ═══ LIGHTS ═══
+scene.add(new THREE.AmbientLight(0x8899aa, 0.5));
+scene.add(new THREE.HemisphereLight(0x99bbdd, 0x443322, 0.5));
+
+var sun = new THREE.DirectionalLight(0xfff0d0, 1.8);
+sun.position.set(5, 10, 4);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -5; sun.shadow.camera.right = 5;
+sun.shadow.camera.top = 5; sun.shadow.camera.bottom = -5;
+sun.shadow.bias = -0.001;
+scene.add(sun);
+
+scene.add(new THREE.DirectionalLight(0xaabbff, 0.3).position.set(-4,6,-3) && new THREE.DirectionalLight(0xaabbff, 0.3));
+
+var bulb = new THREE.PointLight(0xffcc77, 0.6, 6);
+bulb.position.set(1.2, 2.6, 0.5);
+scene.add(bulb);
+
+// ═══ TOOLTIP SYSTEM ═══
+var interactives = [];
+var raycaster = new THREE.Raycaster();
+var mouse = new THREE.Vector2();
+
+function tag(mesh, title, body) {
+  mesh.userData = {title:title, body:body};
+  interactives.push(mesh);
+}
+
+// ═══ MATERIALS ═══
+var M = {
+  conc: new THREE.MeshStandardMaterial({color:0x727578, roughness:0.88}),
+  ground: new THREE.MeshStandardMaterial({color:0x4a4d40, roughness:0.95}),
+  galv: new THREE.MeshStandardMaterial({color:0xa0a5ab, roughness:0.35, metalness:0.75}),
+  angle: new THREE.MeshStandardMaterial({color:0x8a8e94, roughness:0.3, metalness:0.8}),
+  roof: new THREE.MeshStandardMaterial({color:0x5a6570, roughness:0.6, metalness:0.45, side:THREE.DoubleSide}),
+  tankPE: new THREE.MeshStandardMaterial({color:0x0d47a1, roughness:0.5}),
+  tankRim: new THREE.MeshStandardMaterial({color:0x1565c0, roughness:0.4, metalness:0.1}),
+  water: new THREE.MeshLambertMaterial({color:0x26c6da, transparent:true, opacity:0.35}),
+  hdpe: new THREE.MeshStandardMaterial({color:0x1565c0, roughness:0.55}),
+  sand: new THREE.MeshStandardMaterial({color:0xd4b85c, roughness:0.95}),
+  pump: new THREE.MeshStandardMaterial({color:0xb71c1c, roughness:0.4, metalness:0.55}),
+  motor: new THREE.MeshStandardMaterial({color:0x263238, roughness:0.4, metalness:0.6}),
+  pvcS: new THREE.MeshStandardMaterial({color:0xe65100, roughness:0.45}),
+  pvcR: new THREE.MeshStandardMaterial({color:0x1a237e, roughness:0.45}),
+  pvcG: new THREE.MeshStandardMaterial({color:0x78909c, roughness:0.4, metalness:0.15}),
+  valve: new THREE.MeshStandardMaterial({color:0xc62828, roughness:0.3, metalness:0.6}),
+  filter: new THREE.MeshStandardMaterial({color:0x6a1b9a, roughness:0.55}),
+  skim: new THREE.MeshStandardMaterial({color:0x37474f, roughness:0.25, metalness:0.65}),
+  skimCup: new THREE.MeshLambertMaterial({color:0x90a4ae, transparent:true, opacity:0.4}),
+  bio: new THREE.MeshStandardMaterial({color:0x1b5e20, roughness:0.55}),
+  k1: new THREE.MeshStandardMaterial({color:0x81c784, roughness:0.65}),
+  uvShell: new THREE.MeshStandardMaterial({color:0x311b92, roughness:0.2, metalness:0.55}),
+  uvGlow: new THREE.MeshStandardMaterial({color:0xb388ff, emissive:0x651fff, emissiveIntensity:1.0}),
+  air: new THREE.MeshStandardMaterial({color:0x006064, roughness:0.4, metalness:0.45}),
+  dcPump: new THREE.MeshStandardMaterial({color:0x880e4f, roughness:0.4, metalness:0.45}),
+  batt: new THREE.MeshStandardMaterial({color:0x1a1a1a, roughness:0.45, metalness:0.3}),
+  airTube: new THREE.MeshLambertMaterial({color:0x80cbc4, transparent:true, opacity:0.5}),
+  gutter: new THREE.MeshStandardMaterial({color:0x546e7a, roughness:0.5, metalness:0.3}),
+  steel: new THREE.MeshStandardMaterial({color:0xb8bcc2, roughness:0.2, metalness:0.9}),
+  bucket: new THREE.MeshStandardMaterial({color:0xe65100, roughness:0.6}),
+  shelf: new THREE.MeshStandardMaterial({color:0x6a6e74, roughness:0.6, metalness:0.3}),
+};
+
+// ═══ HELPERS ═══
+function add(geo, mt, px, py, pz, rx, ry, rz) {
+  var m = new THREE.Mesh(geo, mt);
+  m.position.set(px, py, pz);
+  if(rx) m.rotation.x = rx;
+  if(ry) m.rotation.y = ry;
+  if(rz) m.rotation.z = rz;
+  m.castShadow = true;
+  m.receiveShadow = true;
+  scene.add(m);
+  return m;
+}
+
+function tube(ax,ay,az, bx,by,bz, r, mt) {
+  var from = new THREE.Vector3(ax,ay,az);
+  var to = new THREE.Vector3(bx,by,bz);
+  var d = new THREE.Vector3().subVectors(to, from);
+  var len = d.length();
+  if(len < 0.001) return;
+  var mid = new THREE.Vector3().addVectors(from, to).multiplyScalar(0.5);
+  var m = new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,10), mt);
+  m.position.copy(mid);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), d.normalize());
+  m.castShadow = true;
+  scene.add(m);
+  return m;
+}
+
+function joint(x,y,z, r, mt) {
+  var m = new THREE.Mesh(new THREE.SphereGeometry(r*1.5,8,8), mt || M.pvcG);
+  m.position.set(x,y,z);
+  m.castShadow = true;
+  scene.add(m);
+  return m;
+}
+
+// ═══ LABEL SPRITES ═══
+function lbl(text, x,y,z, col, s) {
+  col = col || '#ffffff';
+  s = s || 0.25;
+  var c = document.createElement('canvas');
+  c.width = 512; c.height = 48;
+  var g = c.getContext('2d');
+  g.font = 'bold 28px Segoe UI, Arial';
+  g.fillStyle = col;
+  g.textAlign = 'center';
+  g.shadowColor = 'rgba(0,0,0,0.7)';
+  g.shadowBlur = 5;
+  g.fillText(text, 256, 34);
+  var tex = new THREE.CanvasTexture(c);
+  var sp = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:false}));
+  sp.position.set(x,y,z);
+  sp.scale.set(s*3.5, s*0.4, 1);
+  scene.add(sp);
+}
+
+// ════════════════════════════════
+// ENVIRONMENT
+// ════════════════════════════════
+
+// Ground
+var ground = add(new THREE.PlaneGeometry(30,30), M.ground, 0,-0.01,0, -Math.PI/2);
+
+// Concrete pad
+add(new THREE.BoxGeometry(4.0, 0.08, 3.0), M.conc, 1.2, 0.04, 0.5);
+
+// Grid
+var grid = new THREE.GridHelper(8, 16, 0x333640, 0x252830);
+grid.position.y = 0.082;
+scene.add(grid);
+
+// Roof posts
+var postH = 2.8;
+var postGeo = new THREE.CylinderGeometry(0.03, 0.03, postH, 8);
+[[-0.5,-0.6],[3.0,-0.6],[3.0,1.6],[-0.5,1.6]].forEach(function(p) {
+  add(postGeo, M.galv, p[0], postH/2, p[1]);
+});
+
+// Beams
+add(new THREE.BoxGeometry(0.04, 0.05, 2.2), M.galv, -0.5, postH, 0.5);
+add(new THREE.BoxGeometry(0.04, 0.05, 2.2), M.galv, 3.0, postH, 0.5);
+add(new THREE.BoxGeometry(3.5, 0.05, 0.04), M.galv, 1.25, postH, -0.6);
+add(new THREE.BoxGeometry(3.5, 0.05, 0.04), M.galv, 1.25, postH, 1.6);
+
+// Roof
+add(new THREE.PlaneGeometry(4.2, 2.8), M.roof, 1.25, postH+0.06, 0.5, -Math.PI/2+0.04);
+
+// ════════════════════════════════════════
+// RACK: 4 shelves × 5 boxes (steel angle)
+// ════════════════════════════════════════
+var rackX = 0.0;
+var rackZ = 0.0;
+var rackW = 2.3;
+var rackD = 0.42;
+var shelfH = 0.38;
+var nShelves = 4;
+var rackH = shelfH * nShelves + 0.15;
+
+var BW = 0.40, BD = 0.28, BH = 0.14;
+var boxGap = 0.05;
+
+// Uprights (6)
+var upGeo = new THREE.BoxGeometry(0.025, rackH, 0.025);
+[[rackX,rackZ],[rackX+rackW/2,rackZ],[rackX+rackW,rackZ],
+ [rackX,rackZ+rackD],[rackX+rackW/2,rackZ+rackD],[rackX+rackW,rackZ+rackD]].forEach(function(p) {
+  var m = add(upGeo, M.angle, p[0], rackH/2, p[1]);
+  tag(m, 'Steel Angle Iron Rack',
+    'Galvanized 25x25mm | ~2,000 THB<br>4 shelves, 5 boxes each<br>Height: 1.7m | Width: 2.3m<br>Welded or bolted');
+});
+
+// Shelves + boxes
+var waterMeshes = [];
+for(var s = 0; s < nShelves; s++) {
+  var sy = 0.15 + s * shelfH;
+
+  // Rails
+  add(new THREE.BoxGeometry(rackW, 0.015, 0.015), M.angle, rackX+rackW/2, sy, rackZ);
+  add(new THREE.BoxGeometry(rackW, 0.015, 0.015), M.angle, rackX+rackW/2, sy, rackZ+rackD);
+  [0, rackW/2, rackW].forEach(function(dx) {
+    add(new THREE.BoxGeometry(0.015, 0.015, rackD), M.angle, rackX+dx, sy, rackZ+rackD/2);
+  });
+
+  // Shelf plate (slight tilt)
+  add(new THREE.BoxGeometry(rackW-0.02, 0.006, rackD-0.02), M.shelf,
+    rackX+rackW/2, sy+0.004, rackZ+rackD/2, 0.03);
+
+  // Gutter
+  var gm = add(new THREE.BoxGeometry(rackW+0.04, 0.02, 0.035), M.gutter,
+    rackX+rackW/2, sy-0.01, rackZ-0.015);
+  tag(gm, 'Shelf '+(s+1)+' Drain Gutter',
+    'Collects overflow from 5 boxes<br>Tilted to drain pipe<br>Water drops down by gravity');
+
+  // Boxes
+  for(var c = 0; c < 5; c++) {
+    var bx = rackX + 0.04 + c * (BW + boxGap) + BW/2;
+    var bz = rackZ + rackD/2;
+    var n = s * 5 + c + 1;
+
+    // Box body
+    var box = add(new THREE.BoxGeometry(BW, BH, BD), M.hdpe, bx, sy + BH/2 + 0.008, bz);
+    tag(box, 'Box #'+n+' (Shelf '+(s+1)+')',
+      'HDPE 30x40x15cm | 45 THB<br>Bulkhead inlet + overflow<br>Overflow drains to gutter<br>Water: continuous flow');
+
+    // Sand
+    add(new THREE.BoxGeometry(BW-0.02, 0.02, BD-0.02), M.sand, bx, sy+0.025, bz);
+
+    // Water
+    var wm = add(new THREE.BoxGeometry(BW-0.015, 0.04, BD-0.015), M.water, bx, sy+0.055, bz);
+    waterMeshes.push({mesh:wm, baseY: sy+0.055});
+
+    // Inlet nub
+    add(new THREE.CylinderGeometry(0.005, 0.005, 0.015, 6), M.pvcG,
+      bx-BW/2, sy+BH*0.6, bz, 0,0,Math.PI/2);
+    // Outlet nub
+    add(new THREE.CylinderGeometry(0.005, 0.005, 0.015, 6), M.pvcG,
+      bx+BW/2, sy+BH*0.45, bz, 0,0,Math.PI/2);
+  }
+}
+
+// Diag braces
+tube(rackX, 0.15, rackZ+rackD, rackX, rackH, rackZ+rackD, 0.008, M.angle);
+tube(rackX+rackW, 0.15, rackZ+rackD, rackX+rackW, rackH, rackZ+rackD, 0.008, M.angle);
+
+// ─── DRAIN PIPES (gravity) ───
+var drainX = rackX - 0.07;
+for(var s2 = 0; s2 < nShelves; s2++) {
+  var sy2 = 0.15 + s2 * shelfH;
+  tube(rackX, sy2-0.01, rackZ-0.015, drainX, sy2-0.01, rackZ-0.015, 0.013, M.pvcR);
+  joint(drainX, sy2-0.01, rackZ-0.015, 0.01);
+}
+// Vertical drain pipe
+tube(drainX, 0.04, rackZ-0.015, drainX, rackH-0.3, rackZ-0.015, 0.016, M.pvcR);
+
+// ════════════════════════════════
+// CENTRAL TANK 1000L (ground, beside rack)
+// ════════════════════════════════
+var TX = 1.2, TZ = 1.2;
+
+// Tank cylinder
+var tankBody = add(new THREE.CylinderGeometry(0.52, 0.52, 1.0, 32), M.tankPE, TX, 0.5, TZ);
+tag(tankBody, 'Central Tank 1000L',
+  'PE food-grade | 2,500 THB<br>Ground level = gravity drain collects here<br>Pump only pushes UP once');
+
+// Ribs
+[0.25, 0.5, 0.75].forEach(function(y) {
+  add(new THREE.TorusGeometry(0.535, 0.01, 6, 32), M.tankRim, TX, y, TZ, Math.PI/2);
+});
+// Rim
+add(new THREE.TorusGeometry(0.5, 0.018, 8, 32), M.tankRim, TX, 1.0, TZ, Math.PI/2);
+
+// Water
+var tankWater = add(new THREE.CylinderGeometry(0.48, 0.48, 0.8, 32), M.water, TX, 0.42, TZ);
+
+// Air stones
+for(var i = 0; i < 3; i++) {
+  var a = (i/3)*Math.PI*2;
+  add(new THREE.CylinderGeometry(0.015, 0.02, 0.03, 6), M.conc,
+    TX+Math.cos(a)*0.28, 0.02, TZ+Math.sin(a)*0.28);
+}
+
+// Stands
+[[-0.28,-0.28],[0.28,-0.28],[-0.28,0.28],[0.28,0.28]].forEach(function(d) {
+  add(new THREE.BoxGeometry(0.2, 0.08, 0.2), M.conc, TX+d[0], 0.04, TZ+d[1]);
+});
+
+// Drain → Tank
+tube(drainX, 0.04, rackZ-0.015, drainX, 0.04, TZ-0.25, 0.016, M.pvcR);
+joint(drainX, 0.04, TZ-0.25, 0.012);
+tube(drainX, 0.04, TZ-0.25, TX-0.52, 0.04, TZ-0.25, 0.016, M.pvcR);
+joint(TX-0.52, 0.04, TZ-0.25, 0.012);
+tube(TX-0.52, 0.04, TZ-0.25, TX-0.52, 0.25, TZ-0.25, 0.016, M.pvcR);
+
+// ════════════════════════════════
+// PUMP (ground, near tank)
+// ════════════════════════════════
+var PX = 2.1, PZ = 1.2;
+
+var pumpM = add(new THREE.CylinderGeometry(0.1, 0.12, 0.15, 16), M.pump, PX, 0.12, PZ);
+tag(pumpM, 'Pump 1/2 HP',
+  '500-1000 L/hr | 1,200 THB<br>Pushes water UP to top manifold<br>Gravity does the rest!');
+add(new THREE.CylinderGeometry(0.08, 0.08, 0.2, 12), M.motor, PX+0.17, 0.14, PZ, 0,0,Math.PI/2);
+add(new THREE.BoxGeometry(0.45, 0.012, 0.25), M.steel, PX+0.08, 0.006, PZ);
+
+// Tank → Pump
+tube(TX+0.52, 0.13, TZ, PX-0.13, 0.12, PZ, 0.014, M.pvcS);
+joint(TX+0.52, 0.13, TZ, 0.01);
+
+// ════════════════════════════════
+// FILTER CHAIN (vertical, right of rack)
+// ════════════════════════════════
+var FX = rackX + rackW + 0.18;
+var FZ = 0.0;
+
+// Mech filter
+var filtM = add(new THREE.CylinderGeometry(0.12, 0.10, 0.26, 14), M.filter, FX, 0.13, FZ);
+tag(filtM, 'Mechanical Filter', 'Sponge bucket | 200 THB<br>Clean weekly');
+add(new THREE.CylinderGeometry(0.13, 0.13, 0.012, 14), M.filter, FX, 0.27, FZ);
+
+// Skimmer
+var skimM = add(new THREE.CylinderGeometry(0.055, 0.065, 0.42, 14), M.skim, FX, 0.52, FZ);
+tag(skimM, 'Protein Skimmer', 'Bubble Magus QQ1 | 1,200 THB<br>Removes dissolved organics');
+add(new THREE.CylinderGeometry(0.035, 0.055, 0.1, 12), M.skim, FX, 0.79, FZ);
+add(new THREE.CylinderGeometry(0.06, 0.035, 0.1, 12), M.skimCup, FX, 0.89, FZ);
+
+// K1 bio
+var bioM = add(new THREE.CylinderGeometry(0.13, 0.11, 0.3, 14), M.bio, FX+0.32, 0.15, FZ);
+tag(bioM, 'K1 Moving Bed', 'K1 Media 3-5L | 300 THB<br>Cycle 2-4 weeks!');
+add(new THREE.CylinderGeometry(0.14, 0.14, 0.01, 14), M.bio, FX+0.32, 0.31, FZ);
+for(var ki = 0; ki < 12; ki++) {
+  var ka = Math.random()*Math.PI*2, kr = Math.random()*0.07;
+  add(new THREE.DodecahedronGeometry(0.01, 0), M.k1,
+    FX+0.32+Math.cos(ka)*kr, 0.07+Math.random()*0.12, FZ+Math.sin(ka)*kr);
+}
+
+// UV
+var uvM = add(new THREE.CylinderGeometry(0.03, 0.03, 0.3, 12), M.uvShell, FX+0.32, 0.42, FZ, 0,0,Math.PI/2);
+tag(uvM, 'UV Sterilizer 9W', '2,000 THB | Kills pathogens');
+add(new THREE.CylinderGeometry(0.018, 0.018, 0.22, 10), M.uvGlow, FX+0.32, 0.42, FZ, 0,0,Math.PI/2);
+var uvLight = new THREE.PointLight(0x7c4dff, 0.5, 0.8);
+uvLight.position.set(FX+0.32, 0.42, FZ);
+scene.add(uvLight);
+
+// Piping: Pump → Filter chain
+tube(PX-0.12, 0.12, PZ, FX, 0.12, FZ, 0.013, M.pvcS);
+joint(FX, 0.12, FZ, 0.01);
+
+// Filter → Skimmer
+tube(FX, 0.28, FZ, FX, 0.32, FZ, 0.012, M.pvcS);
+
+// → K1
+tube(FX, 0.14, FZ, FX+0.32, 0.12, FZ, 0.012, M.pvcS);
+
+// K1 → UV
+tube(FX+0.32, 0.32, FZ, FX+0.32, 0.38, FZ, 0.012, M.pvcS);
+
+// UV → Vertical riser to TOP MANIFOLD
+var topY = rackH + 0.05;
+tube(FX+0.32, 0.48, FZ, FX+0.32, topY, FZ, 0.015, M.pvcS);
+joint(FX+0.32, topY, FZ, 0.012);
+
+// ════════════════════════════════
+// TOP MANIFOLD (distributes to shelf 4)
+// ════════════════════════════════
+// Turn and run across top of rack
+tube(FX+0.32, topY, FZ, rackX+rackW, topY, rackZ+rackD/2, 0.015, M.pvcS);
+joint(rackX+rackW, topY, rackZ+rackD/2, 0.012);
+tube(rackX+rackW, topY, rackZ+rackD/2, rackX+0.02, topY, rackZ+rackD/2, 0.015, M.pvcS);
+
+var manifM = joint(rackX+rackW/2, topY, rackZ+rackD/2, 0.015, M.valve);
+tag(manifM, 'Top Distribution Manifold',
+  'PVC 1/2" across top of rack<br>5 drip outlets to Shelf 4<br>Pump pushes here, gravity does the rest');
+
+// Drip outlets
+for(var c2 = 0; c2 < 5; c2++) {
+  var dbx = rackX + 0.04 + c2 * (BW + boxGap) + BW/2;
+  tube(dbx, topY, rackZ+rackD/2, dbx, topY-0.06, rackZ+rackD/2, 0.007, M.pvcS);
+  add(new THREE.SphereGeometry(0.007, 6, 6), M.valve, dbx, topY-0.06, rackZ+rackD/2);
+}
+
+// ════════════════════════════════
+// AIR SYSTEM (beside tank)
+// ════════════════════════════════
+var AX = 2.3, AZ = 0.6;
+
+var airM = add(new THREE.BoxGeometry(0.17, 0.09, 0.11), M.air, AX, 0.05, AZ);
+tag(airM, 'Air Pump 40-60W', '600 THB | 24/7 operation');
+
+var dcM = add(new THREE.BoxGeometry(0.12, 0.07, 0.09), M.dcPump, AX+0.22, 0.035, AZ);
+tag(dcM, 'DC Backup Air Pump', 'Auto-switch on power loss | 400 THB');
+
+var batM = add(new THREE.BoxGeometry(0.17, 0.09, 0.11), M.batt, AX+0.22, 0.045, AZ+0.18);
+tag(batM, '12V Battery', '6-12 hrs backup | 500-1,500 THB');
+
+// Air tube to tank
+var airCurve = new THREE.CatmullRomCurve3([
+  new THREE.Vector3(AX, 0.08, AZ),
+  new THREE.Vector3(AX-0.2, 0.3, AZ+0.2),
+  new THREE.Vector3(TX+0.1, 0.6, TZ-0.1),
+  new THREE.Vector3(TX, 0.1, TZ)
+]);
+scene.add(new THREE.Mesh(new THREE.TubeGeometry(airCurve, 24, 0.005, 6, false), M.airTube));
+
+// ════════════════════════════════
+// PROPS
+// ════════════════════════════════
+var fbM = add(new THREE.CylinderGeometry(0.09, 0.07, 0.18, 10), M.bucket, 2.5, 0.09, 1.5);
+tag(fbM, 'Feed Bucket', 'CP Starter/Grower | 700 THB');
+
+// Power strip
+add(new THREE.BoxGeometry(0.25, 0.02, 0.04), M.motor, 2.2, 0.01, 0.5);
+
+// ════════════════════════════════
+// LABELS
+// ════════════════════════════════
+lbl('SHELF 4', rackX+rackW/2, 0.15+3*shelfH+BH+0.04, rackZ-0.12, '#ffab40', 0.13);
+lbl('SHELF 3', rackX+rackW/2, 0.15+2*shelfH+BH+0.04, rackZ-0.12, '#ffab40', 0.13);
+lbl('SHELF 2', rackX+rackW/2, 0.15+1*shelfH+BH+0.04, rackZ-0.12, '#ffab40', 0.13);
+lbl('SHELF 1', rackX+rackW/2, 0.15+0*shelfH+BH+0.04, rackZ-0.12, '#ffab40', 0.13);
+lbl('TANK 1000L', TX, 1.25, TZ, '#64b5f6', 0.2);
+lbl('PUMP', PX, 0.38, PZ, '#ef9a9a', 0.12);
+lbl('FILTER CHAIN', FX+0.15, 1.05, FZ, '#ce93d8', 0.12);
+lbl('MANIFOLD', rackX+rackW/2, topY+0.1, rackZ+rackD/2, '#ffab40', 0.12);
+lbl('GRAVITY', drainX-0.08, 0.8, rackZ-0.015, '#5c6bc0', 0.1);
+
+// Flow arrows
+lbl('\u2191 UP', FX+0.32, rackH/2, FZ-0.08, '#ff9800', 0.12);
+lbl('\u2193 DOWN', drainX-0.06, 0.45, rackZ-0.015, '#5c6bc0', 0.12);
+
+// ════════════════════════════════
+// BUBBLES (in tank)
+// ════════════════════════════════
+var NB = 35;
+var bArr = new Float32Array(NB*3);
+var bSpd = new Float32Array(NB);
+for(var bi = 0; bi < NB; bi++) {
+  bArr[bi*3] = TX + (Math.random()-0.5)*0.6;
+  bArr[bi*3+1] = Math.random()*0.7;
+  bArr[bi*3+2] = TZ + (Math.random()-0.5)*0.6;
+  bSpd[bi] = 0.001 + Math.random()*0.003;
+}
+var bGeo = new THREE.BufferGeometry();
+bGeo.setAttribute('position', new THREE.BufferAttribute(bArr, 3));
+var bubbles = new THREE.Points(bGeo,
+  new THREE.PointsMaterial({color:0x80deea, size:0.015, transparent:true, opacity:0.4}));
+scene.add(bubbles);
+
+// ════════════════════════════════
+// MOUSE CONTROLS (manual orbit)
+// ════════════════════════════════
+var isDragging = false;
+var prevMouse = {x:0, y:0};
+var spherical = new THREE.Spherical().setFromVector3(
+  camera.position.clone().sub(new THREE.Vector3(1.0, 0.7, 0.4))
+);
+var target = new THREE.Vector3(1.0, 0.7, 0.4);
+
+renderer.domElement.addEventListener('mousedown', function(e) {
+  isDragging = true;
+  prevMouse = {x:e.clientX, y:e.clientY};
+});
+renderer.domElement.addEventListener('mousemove', function(e) {
+  if(!isDragging) return;
+  var dx = e.clientX - prevMouse.x;
+  var dy = e.clientY - prevMouse.y;
+  spherical.theta -= dx * 0.005;
+  spherical.phi = Math.max(0.2, Math.min(Math.PI/2.1, spherical.phi - dy * 0.005));
+  prevMouse = {x:e.clientX, y:e.clientY};
+});
+renderer.domElement.addEventListener('mouseup', function() { isDragging = false; });
+renderer.domElement.addEventListener('wheel', function(e) {
+  spherical.radius = Math.max(2, Math.min(12, spherical.radius + e.deltaY * 0.002));
+});
+// Touch support
+renderer.domElement.addEventListener('touchstart', function(e) {
+  isDragging = true;
+  prevMouse = {x:e.touches[0].clientX, y:e.touches[0].clientY};
+});
+renderer.domElement.addEventListener('touchmove', function(e) {
+  if(!isDragging) return;
+  var dx = e.touches[0].clientX - prevMouse.x;
+  var dy = e.touches[0].clientY - prevMouse.y;
+  spherical.theta -= dx * 0.005;
+  spherical.phi = Math.max(0.2, Math.min(Math.PI/2.1, spherical.phi - dy * 0.005));
+  prevMouse = {x:e.touches[0].clientX, y:e.touches[0].clientY};
+});
+renderer.domElement.addEventListener('touchend', function() { isDragging = false; });
+
+// ════════════════════════════════
+// TOOLTIP
+// ════════════════════════════════
+var tip = document.getElementById('tip');
+var tipT = tip.querySelector('.t');
+var tipB = tip.querySelector('.b');
+
+window.addEventListener('pointermove', function(e) {
+  mouse.x = (e.clientX / innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  var hits = raycaster.intersectObjects(interactives);
+  if(hits.length > 0) {
+    var d = hits[0].object.userData;
+    tipT.textContent = d.title;
+    tipB.innerHTML = d.body;
+    tip.style.display = 'block';
+    tip.style.left = (e.clientX + 14) + 'px';
+    tip.style.top = (e.clientY + 14) + 'px';
+    renderer.domElement.style.cursor = 'pointer';
+  } else {
+    tip.style.display = 'none';
+    renderer.domElement.style.cursor = 'grab';
+  }
+});
+
+// ════════════════════════════════
+// ANIMATION
+// ════════════════════════════════
+var time = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  time += 0.016;
+
+  // Camera orbit
+  camera.position.setFromSpherical(spherical).add(target);
+  camera.lookAt(target);
+
+  // Water shimmer
+  for(var wi = 0; wi < waterMeshes.length; wi++) {
+    waterMeshes[wi].mesh.position.y = waterMeshes[wi].baseY + Math.sin(time*1.8+wi*0.4)*0.001;
+  }
+  tankWater.position.y = 0.42 + Math.sin(time*1.1)*0.003;
+
+  // Bubbles
+  var bp = bGeo.attributes.position.array;
+  for(var bbi = 0; bbi < NB; bbi++) {
+    bp[bbi*3+1] += bSpd[bbi];
+    if(bp[bbi*3+1] > 0.85) {
+      bp[bbi*3+1] = 0.05;
+      bp[bbi*3] = TX + (Math.random()-0.5)*0.6;
+      bp[bbi*3+2] = TZ + (Math.random()-0.5)*0.6;
+    }
+  }
+  bGeo.attributes.position.needsUpdate = true;
+
+  // UV flicker
+  uvLight.intensity = 0.4 + Math.sin(time*5)*0.15;
+
+  renderer.render(scene, camera);
+}
+animate();
+
+// Resize
+window.addEventListener('resize', function() {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
