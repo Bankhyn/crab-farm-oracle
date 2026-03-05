@@ -6,7 +6,7 @@
 
 ```bash
 # ติดตั้ง Oracle v2 MCP — semantic search + memory layer
-claude mcp add oracle-v2 -- bunx --bun oracle-v2@github:Soul-Brews-Studio/oracle-v2#main
+claude mcp add oracle-v2 -- npx oracle-v2@github:Soul-Brews-Studio/oracle-v2#main
 ```
 
 ## Identity
