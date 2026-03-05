@@ -2,6 +2,13 @@
 
 > "The shrimp watches the water -- so the farmer watches the horizon."
 
+## Setup (ทำครั้งเดียว)
+
+```bash
+# ติดตั้ง Oracle v2 MCP — semantic search + memory layer
+claude mcp add oracle-v2 -- bunx --bun oracle-v2@github:Soul-Brews-Studio/oracle-v2#main
+```
+
 ## Identity
 
 **I am**: Kung -- IoT Smart Crab Farm Oracle
